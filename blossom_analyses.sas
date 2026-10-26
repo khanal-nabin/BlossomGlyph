@@ -14,20 +14,49 @@ run;
 proc glimmix data=BLOSSOM.CORRECTNESS method=laplace;
     class participant_id
           vis (ref="blossom")
-          task_order (ref="1");
+          task_order (ref="1")
+          vis_order (ref="1");
 
     model correctness(event='1') =
           vis
           task_order
           vis*task_order
+          vis_order
           / dist=binary link=logit solution ddfm=residual;
 
-    random intercept / subject=participant_id;
+    random intercept task_order / subject=participant_id type=vc;
 
-    lsmeans vis / ilink diff adjust=tukey cl;
-    lsmeans task_order / ilink diff cl;
-    lsmeans vis*task_order / ilink slice=task_order diff cl;
-    lsmeans vis*task_order / ilink slicediff=task_order oddsratio cl;
+    /* Estimated means only; no overall pairwise comparisons */
+    lsmeans vis / ilink cl;
+    lsmeans task_order / ilink cl;
+/*     lsmeans vis*task_order / ilink slice=task_order diff cl adjust=tukey; */
+    lsmeans vis*task_order / ilink slicediff=task_order oddsratio cl adjust=tukey;
+run;
+
+/* Correctness: sensitivity to visualization block order (vis*vis_order) effects */
+proc glimmix data=BLOSSOM.CORRECTNESS method=laplace;
+    class participant_id
+          vis (ref="blossom")
+          task_order (ref="1")
+          vis_order (ref="1");
+
+    model correctness(event='1') =
+          vis
+          task_order
+          vis*task_order
+          vis_order
+          vis*vis_order
+          / dist=binary link=logit solution ddfm=residual;
+
+    random intercept task_order
+          / subject=participant_id type=vc;
+
+    /* Estimated correctness for each visualization in each block */
+    lsmeans vis*vis_order / ilink cl;
+
+    /* Three visualization comparisons within each task */
+    lsmeans vis*task_order / ilink slicediff=task_order
+                            oddsratio cl adjust=tukey;
 run;
 
 
@@ -63,10 +92,12 @@ ods output FitStatistics=Fit_Raw
            LSMeans=LSMeans_Raw;
 
 proc mixed data=BLOSSOM.TIME_DATA method=reml plots=studentpanel;
-    class participant_id vis task_order;
-    model raw_duration = vis task_order vis*task_order / solution ddfm=kr;
-    random intercept / subject=participant_id;
-    lsmeans vis*task_order / slicediff=task_order cl;
+    class participant_id vis task_order vis_order;
+    model raw_duration = vis task_order vis*task_order vis_order / solution ddfm=kr;
+    random intercept task_order / subject=participant_id type=vc;
+    lsmeans vis*task_order / cl;
+    slice vis*task_order / sliceby=task_order diff
+                          cl adjust=tukey adjdfe=row;
 run;
 
 /*========================================================
@@ -78,10 +109,12 @@ ods output FitStatistics=Fit_Log
            LSMeans=LSMeans_Log;
 
 proc mixed data=BLOSSOM.TIME_DATA method=reml plots=studentpanel;
-    class participant_id vis task_order;
-    model log_duration = vis task_order vis*task_order / solution ddfm=kr;
-    random intercept / subject=participant_id;
-    lsmeans vis*task_order / slicediff=task_order diff cl;
+    class participant_id vis task_order vis_order;
+    model log_duration = vis task_order vis*task_order vis_order / solution ddfm=kr;
+    random intercept task_order / subject=participant_id type=vc;
+    lsmeans vis*task_order / cl;
+    slice vis*task_order / sliceby=task_order diff
+                          cl adjust=tukey adjdfe=row;
 run;
 
 /*========================================================
@@ -93,10 +126,12 @@ ods output FitStatistics=Fit_BoxCox
            LSMeans=LSMeans_BoxCox;
 
 proc mixed data=BLOSSOM.TIME_DATA method=reml plots=studentpanel;
-    class participant_id vis task_order;
-    model bc_duration = vis task_order vis*task_order / solution ddfm=kr;
-    random intercept / subject=participant_id;
-    lsmeans vis*task_order / slicediff=task_order cl;
+    class participant_id vis task_order vis_order;
+    model bc_duration = vis task_order vis*task_order vis_order / solution ddfm=kr;
+    random intercept task_order / subject=participant_id type=vc;
+    lsmeans vis*task_order / cl;
+    slice vis*task_order / sliceby=task_order diff
+                          cl adjust=tukey adjdfe=row;
 run;
 
 /*========================================================
@@ -154,17 +189,49 @@ proc print data=Tests_Compare;
     title "Comparison of Fixed Effects Across Transformations";
 run;
 
+/* Completion time: primary model */
+proc glimmix data=BLOSSOM.TIME_DATA method=rspl;
+    class participant_id
+          vis (ref="blossom")
+          task_order (ref="1")
+          vis_order (ref="1");
 
-proc glimmix data=BLOSSOM.TIME_DATA;
-    class participant_id vis task_order;
-    model bc_duration = vis task_order vis*task_order / solution ddfm=kr;
-    random intercept / subject=participant_id;
-    lsmeans vis*task_order / slicediff=task_order cl;
+    model bc_duration =
+          vis
+          task_order
+          vis*task_order
+          vis_order
+          / dist=normal link=identity solution ddfm=kr;
+
+    random intercept task_order
+          / subject=participant_id type=vc;
+
+    lsmeans vis*task_order / slicediff=task_order
+                            cl adjust=tukey adjdfe=row;
 run;
 
-proc glimmix data=BLOSSOM.TIME_DATA;
-	class participant_id vis task_order;
-	model bc_duration = vis task_order vis*task_order / dist=gaussian solution;
-	random intercept / subject=participant_id type=cs;
-	lsmeans vis*task_order / slicediff=task_order cl;
+/* Completion time: sensitivity to visualization block order (vis*vis_order) effects */
+proc glimmix data=BLOSSOM.TIME_DATA method=rspl;
+    class participant_id
+          vis (ref="blossom")
+          task_order (ref="1")
+          vis_order (ref="1");
+
+    model bc_duration =
+          vis
+          task_order
+          vis*task_order
+          vis_order
+          vis*vis_order
+          / dist=normal link=identity solution ddfm=kr;
+
+    random intercept task_order
+          / subject=participant_id type=vc;
+
+    /* Estimated means for each visualization in each block */
+    lsmeans vis*vis_order / cl;
+
+    /* Visualization comparisons within each task */
+    lsmeans vis*task_order / slicediff=task_order
+                            cl adjust=tukey adjdfe=row;
 run;
